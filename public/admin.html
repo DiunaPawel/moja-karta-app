@@ -8,8 +8,9 @@
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-    // WKLEJ TUTAJ SWOJE DANE Z firebaseConfig!
+    // TWOJE DANE Z FIREBASE
   const firebaseConfig = {
   apiKey: "AIzaSyA-JqDIQLl29MqzafmdcAg3NOZ_jO99CDk",
   authDomain: "moja-karta-system-87f5b.firebaseapp.com",
@@ -22,8 +23,53 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
 
     let clients = [];
+    let currentUser = null;
+
+    // Sprawdź czy zalogowany
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('adminPanel').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = user.email;
+        loadClients();
+      } else {
+        currentUser = null;
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('adminPanel').classList.add('hidden');
+      }
+    });
+
+    // Logowanie
+    window.login = async function() {
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const errorDiv = document.getElementById('loginError');
+      
+      if (!email || !password) {
+        errorDiv.textContent = 'Wypełnij wszystkie pola!';
+        errorDiv.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        errorDiv.classList.add('hidden');
+      } catch (error) {
+        errorDiv.textContent = 'Błędny email lub hasło!';
+        errorDiv.classList.remove('hidden');
+      }
+    };
+
+    // Wylogowanie
+    window.logout = async function() {
+      if (confirm('Czy na pewno chcesz się wylogować?')) {
+        await signOut(auth);
+      }
+    };
 
     // Załaduj klientów
     async function loadClients() {
@@ -146,7 +192,7 @@
       }
     };
 
-    // Wyślij promocję (symulacja)
+    // Wyślij promocję
     window.sendPromotion = function() {
       const message = document.getElementById('promoMessage').value;
       if (!message) {
@@ -158,73 +204,134 @@
       document.getElementById('promoMessage').value = '';
     };
 
-    // Załaduj po starcie
-    window.addEventListener('load', loadClients);
+    // Enter na logowanie
+    window.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hidden')) {
+        login();
+      }
+    });
   </script>
 </head>
 <body class="bg-gray-100 min-h-screen">
-  <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg">
-    <div class="max-w-6xl mx-auto px-6 py-6">
-      <h1 class="text-3xl font-bold">Panel Administratora</h1>
-      <p class="text-purple-100">Zarządzanie kartami lojalnościowymi</p>
+  
+  <!-- EKRAN LOGOWANIA -->
+  <div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-pink-600">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">🔐 Panel Admina</h1>
+        <p class="text-gray-600">Zaloguj się aby kontynuować</p>
+      </div>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <input 
+            type="email" 
+            id="loginEmail" 
+            placeholder="admin@example.com"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          >
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Hasło</label>
+          <input 
+            type="password" 
+            id="loginPassword" 
+            placeholder="••••••••"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          >
+        </div>
+        
+        <div id="loginError" class="hidden bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+        </div>
+        
+        <button 
+          onclick="login()"
+          class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition text-lg"
+        >
+          Zaloguj się
+        </button>
+      </div>
     </div>
   </div>
 
-  <div class="max-w-6xl mx-auto px-6 py-8">
-    <!-- Statystyki -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-gray-500 text-sm mb-2">Liczba klientów</h3>
-        <p class="text-3xl font-bold text-purple-600" id="totalClients">0</p>
-      </div>
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-gray-500 text-sm mb-2">Suma punktów</h3>
-        <p class="text-3xl font-bold text-pink-600" id="totalPoints">0</p>
-      </div>
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-gray-500 text-sm mb-2">Aktywni użytkownicy</h3>
-        <p class="text-3xl font-bold text-indigo-600" id="activeUsers">0</p>
+  <!-- PANEL ADMINA (ukryty dopóki nie zalogowany) -->
+  <div id="adminPanel" class="hidden">
+    <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg">
+      <div class="max-w-6xl mx-auto px-6 py-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-3xl font-bold">Panel Administratora</h1>
+            <p class="text-purple-100">Zarządzanie kartami lojalnościowymi</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-purple-100" id="userEmail"></p>
+            <button onclick="logout()" class="mt-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition">
+              Wyloguj się
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Dodaj nowego klienta -->
-    <div class="bg-white rounded-lg shadow p-6 mb-8">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">➕ Dodaj nowego klienta</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input type="text" id="newName" placeholder="Imię i nazwisko" class="px-4 py-2 border rounded-lg">
-        <input type="email" id="newEmail" placeholder="Email" class="px-4 py-2 border rounded-lg">
-        <input type="text" id="newCardNumber" placeholder="Numer karty (np. 1234 5678 9012 3456)" class="px-4 py-2 border rounded-lg">
-        <input type="text" id="newBarcode" placeholder="Kod kreskowy (np. 1234567890123)" class="px-4 py-2 border rounded-lg">
+    <div class="max-w-6xl mx-auto px-6 py-8">
+      <!-- Statystyki -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-gray-500 text-sm mb-2">Liczba klientów</h3>
+          <p class="text-3xl font-bold text-purple-600" id="totalClients">0</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-gray-500 text-sm mb-2">Suma punktów</h3>
+          <p class="text-3xl font-bold text-pink-600" id="totalPoints">0</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+          <h3 class="text-gray-500 text-sm mb-2">Aktywni użytkownicy</h3>
+          <p class="text-3xl font-bold text-indigo-600" id="activeUsers">0</p>
+        </div>
       </div>
-      <button onclick="addClient()" class="mt-4 w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition">
-        Dodaj klienta
-      </button>
-    </div>
 
-    <!-- Wyślij promocję -->
-    <div class="bg-white rounded-lg shadow p-6 mb-8">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">📢 Wyślij promocję do wszystkich</h2>
-      <textarea id="promoMessage" placeholder="Treść promocji..." class="w-full px-4 py-2 border rounded-lg mb-4" rows="3"></textarea>
-      <button onclick="sendPromotion()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 transition">
-        Wyślij promocję
-      </button>
-    </div>
+      <!-- Dodaj nowego klienta -->
+      <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">➕ Dodaj nowego klienta</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input type="text" id="newName" placeholder="Imię i nazwisko" class="px-4 py-2 border rounded-lg">
+          <input type="email" id="newEmail" placeholder="Email" class="px-4 py-2 border rounded-lg">
+          <input type="text" id="newCardNumber" placeholder="Numer karty (np. 1234 5678 9012 3456)" class="px-4 py-2 border rounded-lg">
+          <input type="text" id="newBarcode" placeholder="Kod kreskowy (np. 1234567890123)" class="px-4 py-2 border rounded-lg">
+        </div>
+        <button onclick="addClient()" class="mt-4 w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition">
+          Dodaj klienta
+        </button>
+      </div>
 
-    <!-- Lista klientów -->
-    <div class="bg-white rounded-lg shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">👥 Lista klientów</h2>
-      <div id="clientsList" class="space-y-4">
-        <p class="text-gray-500">Ładowanie...</p>
+      <!-- Wyślij promocję -->
+      <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">📢 Wyślij promocję do wszystkich</h2>
+        <textarea id="promoMessage" placeholder="Treść promocji..." class="w-full px-4 py-2 border rounded-lg mb-4" rows="3"></textarea>
+        <button onclick="sendPromotion()" class="w-full bg-green-500 text-white py-3 rounded-lg font-bold hover:bg-green-600 transition">
+          Wyślij promocję
+        </button>
+      </div>
+
+      <!-- Lista klientów -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">👥 Lista klientów</h2>
+        <div id="clientsList" class="space-y-4">
+          <p class="text-gray-500">Ładowanie...</p>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    // Aktualizuj statystyki
     setInterval(() => {
-      document.getElementById('totalClients').textContent = clients.length;
-      document.getElementById('totalPoints').textContent = clients.reduce((sum, c) => sum + (c.points || 0), 0);
-      document.getElementById('activeUsers').textContent = clients.length;
+      if (window.clients) {
+        document.getElementById('totalClients').textContent = clients.length;
+        document.getElementById('totalPoints').textContent = clients.reduce((sum, c) => sum + (c.points || 0), 0);
+        document.getElementById('activeUsers').textContent = clients.length;
+      }
     }, 1000);
   </script>
 </body>
