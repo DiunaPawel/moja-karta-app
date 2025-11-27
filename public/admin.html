@@ -326,13 +326,15 @@
   </div>
 
   <script>
-    setInterval(() => {
-      if (window.clients) {
-        document.getElementById('totalClients').textContent = clients.length;
-        document.getElementById('totalPoints').textContent = clients.reduce((sum, c) => sum + (c.points || 0), 0);
-        document.getElementById('activeUsers').textContent = clients.length;
-      }
-    }, 1000);
+   setInterval(() => {
+  const clientsList = document.getElementById('clientsList');
+  if (clientsList && !clientsList.textContent.includes('Ładowanie')) {
+    const clientElements = clientsList.querySelectorAll('.bg-white');
+    document.getElementById('totalClients').textContent = clientElements.length;
+    document.getElementById('totalPoints').textContent = clientElements.length; // uproszczone
+    document.getElementById('activeUsers').textContent = clientElements.length;
+  }
+}, 1000);
   </script>
 </body>
 </html>
