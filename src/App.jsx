@@ -1,35 +1,138 @@
-import React, { useState } from 'react';
-import { CreditCard, Gift, BarChart3, User, QrCode, Star, TrendingUp, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CreditCard, Gift, BarChart3, User, QrCode, Star, TrendingUp, Calendar, LogOut } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+
+// WKLEJ TUTAJ SWOJE DANE Z FIREBASE (te same co w admin.html!)
+const firebaseConfig = {
+  apiKey: "TWOJ-API-KEY",
+  authDomain: "TWOJ-AUTH-DOMAIN",
+  projectId: "TWOJ-PROJECT-ID",
+  storageBucket: "TWOJ-STORAGE-BUCKET",
+  messagingSenderId: "TWOJ-SENDER-ID",
+  appId: "TWOJ-APP-ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 export default function LoyaltyCardApp() {
-  const [activeTab, setActiveTab] = useState('card');
-  const [points, setPoints] = useState(1247);
-  const [level, setLevel] = useState('Gold');
-  const [brightness, setBrightness] = useState(100);
+  const [user, setUser] = useState(null);
+  const [customerData, setCustomerData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authMode, setAuthMode] = useState('login'); // 'login' lub 'register'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
   
-  const customerData = {
-    name: 'Jan Kowalski',
-    cardNumber: '5428 9012 3456 7890',
-    barcode: '5428901234567890',
-    memberSince: '2022-03-15',
-    email: 'jan.kowalski@example.com'
+  const [activeTab, setActiveTab] = useState('card');
+  const [brightness, setBrightness] = useState(100);
+
+  // Sprawdź czy zalogowany
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        await loadCustomerData(currentUser.uid);
+      } else {
+        setUser(null);
+        setCustomerData(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Załaduj dane klienta
+  const loadCustomerData = async (userId) => {
+    try {
+      const docRef = doc(db, 'clients', userId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        setCustomerData(docSnap.data());
+      }
+    } catch (err) {
+      console.error('Błąd ładowania danych:', err);
+    }
   };
 
-  const transactions = [
-    { id: 1, date: '2024-11-20', shop: 'Sklep Centrum', amount: 156.50, points: 15 },
-    { id: 2, date: '2024-11-15', shop: 'Sklep Galeria', amount: 89.20, points: 8 },
-    { id: 3, date: '2024-11-10', shop: 'Sklep Rataje', amount: 234.80, points: 23 },
-    { id: 4, date: '2024-11-05', shop: 'Sklep Centrum', amount: 67.40, points: 6 },
-  ];
+  // Logowanie
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      setError('Błędny email lub hasło');
+    }
+  };
 
-  const rewards = [
-    { id: 1, name: '10 zł rabatu', points: 500, icon: '💰' },
-    { id: 2, name: 'Darmowa dostawa', points: 300, icon: '🚚' },
-    { id: 3, name: '15% zniżki', points: 800, icon: '🎁' },
-    { id: 4, name: 'Darmowy produkt', points: 1000, icon: '🎉' },
-  ];
+  // Rejestracja
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!name || !email || !password) {
+      setError('Wypełnij wszystkie pola');
+      return;
+    }
 
-  const generateBarcode = (code) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userId = userCredential.user.uid;
+      
+      // Utwórz dane klienta
+      const cardNumber = generateCardNumber();
+      const barcode = generateBarcode();
+      
+      await setDoc(doc(db, 'clients', userId), {
+        name,
+        email,
+        cardNumber,
+        barcode,
+        points: 0,
+        level: 'Silver',
+        memberSince: new Date().toISOString().split('T')[0]
+      });
+      
+    } catch (err) {
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Ten email jest już zajęty');
+      } else {
+        setError('Błąd podczas rejestracji');
+      }
+    }
+  };
+
+  // Wylogowanie
+  const handleLogout = async () => {
+    if (confirm('Czy na pewno chcesz się wylogować?')) {
+      await signOut(auth);
+    }
+  };
+
+  // Generuj numer karty
+  const generateCardNumber = () => {
+    const part1 = Math.floor(1000 + Math.random() * 9000);
+    const part2 = Math.floor(1000 + Math.random() * 9000);
+    const part3 = Math.floor(1000 + Math.random() * 9000);
+    const part4 = Math.floor(1000 + Math.random() * 9000);
+    return `${part1} ${part2} ${part3} ${part4}`;
+  };
+
+  // Generuj kod kreskowy
+  const generateBarcode = () => {
+    return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
+  };
+
+  // Generowanie kodu kreskowego (SVG)
+  const generateBarcodeImage = (code) => {
     const bars = code.split('').map(digit => {
       const patterns = ['0001101', '0011001', '0010011', '0111101', '0100011', 
                        '0110001', '0101111', '0111011', '0110111', '0001011'];
@@ -50,6 +153,113 @@ export default function LoyaltyCardApp() {
     );
   };
 
+  // Ekran ładowania
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <p className="text-gray-600">Ładowanie...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Ekran logowania/rejestracji
+  if (!user || !customerData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              {authMode === 'login' ? '🔐 Logowanie' : '✨ Rejestracja'}
+            </h1>
+            <p className="text-gray-600">
+              {authMode === 'login' ? 'Zaloguj się do swojej karty' : 'Stwórz nowe konto'}
+            </p>
+          </div>
+
+          <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-4">
+            {authMode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Imię i nazwisko</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Jan Kowalski"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="jan@example.com"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Hasło</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition text-lg"
+            >
+              {authMode === 'login' ? 'Zaloguj się' : 'Zarejestruj się'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'register' : 'login');
+                setError('');
+              }}
+              className="text-purple-600 hover:text-purple-700 font-medium"
+            >
+              {authMode === 'login' 
+                ? 'Nie masz konta? Zarejestruj się' 
+                : 'Masz już konto? Zaloguj się'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Główna aplikacja (po zalogowaniu)
+  const transactions = [
+    { id: 1, date: '2024-11-20', shop: 'Sklep Centrum', amount: 156.50, points: 15 },
+    { id: 2, date: '2024-11-15', shop: 'Sklep Galeria', amount: 89.20, points: 8 },
+  ];
+
+  const rewards = [
+    { id: 1, name: '10 zł rabatu', points: 500, icon: '💰' },
+    { id: 2, name: 'Darmowa dostawa', points: 300, icon: '🚚' },
+    { id: 3, name: '15% zniżki', points: 800, icon: '🎁' },
+    { id: 4, name: 'Darmowy produkt', points: 1000, icon: '🎉' },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50">
       <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg">
@@ -60,7 +270,7 @@ export default function LoyaltyCardApp() {
               <p className="text-purple-100 text-sm">Program lojalnościowy</p>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold">{points}</div>
+              <div className="text-3xl font-bold">{customerData.points}</div>
               <div className="text-xs text-purple-100">punktów</div>
             </div>
           </div>
@@ -78,7 +288,7 @@ export default function LoyaltyCardApp() {
                 <div className="flex items-center justify-between mb-8">
                   <div className="flex items-center gap-2">
                     <Star className="text-yellow-300" size={24} fill="currentColor" />
-                    <span className="font-bold text-lg">{level} Member</span>
+                    <span className="font-bold text-lg">{customerData.level} Member</span>
                   </div>
                   <CreditCard size={32} />
                 </div>
@@ -111,7 +321,7 @@ export default function LoyaltyCardApp() {
                 className="bg-white border-4 border-gray-200 rounded-xl p-6 mb-4"
                 style={{ filter: `brightness(${brightness}%)` }}
               >
-                {generateBarcode(customerData.barcode)}
+                {generateBarcodeImage(customerData.barcode)}
               </div>
 
               <div className="flex items-center gap-2 mb-2">
@@ -165,16 +375,16 @@ export default function LoyaltyCardApp() {
             <div className="bg-white rounded-xl shadow-md p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-2">Twoje punkty</h2>
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-4xl font-bold text-purple-600">{points}</span>
+                <span className="text-4xl font-bold text-purple-600">{customerData.points}</span>
                 <span className="text-gray-600">punktów</span>
               </div>
               <div className="bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full"
-                  style={{ width: `${(points % 1000) / 10}%` }}
+                  style={{ width: `${(customerData.points % 1000) / 10}%` }}
                 ></div>
               </div>
-              <p className="text-sm text-gray-600 mt-2">Do następnego poziomu: {1000 - (points % 1000)} pkt</p>
+              <p className="text-sm text-gray-600 mt-2">Do następnego poziomu: {1000 - (customerData.points % 1000)} pkt</p>
             </div>
 
             <h3 className="text-lg font-bold text-gray-800 px-2">Dostępne nagrody</h3>
@@ -189,14 +399,14 @@ export default function LoyaltyCardApp() {
                     </div>
                   </div>
                   <button
-                    disabled={points < reward.points}
+                    disabled={customerData.points < reward.points}
                     className={`px-6 py-2 rounded-lg font-medium ${
-                      points >= reward.points
+                      customerData.points >= reward.points
                         ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
                         : 'bg-gray-200 text-gray-400'
                     }`}
                   >
-                    {points >= reward.points ? 'Odbierz' : 'Zablokowane'}
+                    {customerData.points >= reward.points ? 'Odbierz' : 'Zablokowane'}
                   </button>
                 </div>
               </div>
@@ -246,9 +456,16 @@ export default function LoyaltyCardApp() {
                   <label className="text-sm text-gray-600 block mb-1">Status</label>
                   <div className="flex items-center gap-2">
                     <Star className="text-yellow-500" size={20} fill="currentColor" />
-                    <span className="font-bold text-gray-800">{level} Member</span>
+                    <span className="font-bold text-gray-800">{customerData.level} Member</span>
                   </div>
                 </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2"
+                >
+                  <LogOut size={20} />
+                  Wyloguj się
+                </button>
               </div>
             </div>
           </div>
