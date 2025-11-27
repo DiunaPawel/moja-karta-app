@@ -6,14 +6,14 @@ import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs } 
 
 // WKLEJ TUTAJ SWOJE DANE Z FIREBASE (te same co w admin.html!)
 const firebaseConfig = {
-  apiKey: "TWOJ-API-KEY",
-  authDomain: "TWOJ-AUTH-DOMAIN",
-  projectId: "TWOJ-PROJECT-ID",
-  storageBucket: "TWOJ-STORAGE-BUCKET",
-  messagingSenderId: "TWOJ-SENDER-ID",
-  appId: "TWOJ-APP-ID"
+  apiKey: "AIzaSyA-JqDIQLl29MqzafmdcAg3NOZ_jO99CDk",
+  authDomain: "moja-karta-system-87f5b.firebaseapp.com",
+  projectId: "moja-karta-system-87f5b",
+  storageBucket: "moja-karta-system-87f5b.firebasestorage.app",
+  messagingSenderId: "874314316562",
+  appId: "1:874314316562:web:bc19303bdd9d348962d1cb",
+  measurementId: "G-YF4DYNYEX7"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
