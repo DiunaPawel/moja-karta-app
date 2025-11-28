@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Gift, BarChart3, User, QrCode, Star, TrendingUp, Calendar, LogOut } from 'lucide-react';
+import { CreditCard, Gift, BarChart3, User, QrCode, Star, TrendingUp, Calendar } from 'lucide-react';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyA-JqDIQLl29MqzafmdcAg3NOZ_jO99CDk",
@@ -10,108 +9,47 @@ const firebaseConfig = {
   projectId: "moja-karta-system-87f5b",
   storageBucket: "moja-karta-system-87f5b.firebasestorage.app",
   messagingSenderId: "874314316562",
-  appId: "1:874314316562:web:bc19303bdd9d348962d1cb",
-  measurementId: "G-YF4DYNYEX7"
+  appId: "1:874314316562:web:bc19303bdd9d348962d1cb"
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
 const db = getFirestore(app);
 
 export default function LoyaltyCardApp() {
-  const [user, setUser] = useState(null);
   const [customerData, setCustomerData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authMode, setAuthMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('card');
   const [brightness, setBrightness] = useState(100);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        await loadCustomerData(currentUser.uid);
-      } else {
-        setUser(null);
-        setCustomerData(null);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    loadCustomerData();
   }, []);
 
-  const loadCustomerData = async (userId) => {
-    try {
-      const docRef = doc(db, 'clients', userId);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setCustomerData(docSnap.data());
-      }
-    } catch (err) {
-      console.error('Błąd ładowania danych:', err);
-    }
-  };
+  const loadCustomerData = async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientId = urlParams.get('id');
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      setError('Błędny email lub hasło');
-    }
-  };
-
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setError('');
-    if (!name || !email || !password) {
-      setError('Wypełnij wszystkie pola');
+    if (!clientId) {
+      setError('Brak ID klienta w linku');
+      setLoading(false);
       return;
     }
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const userId = userCredential.user.uid;
-      const cardNumber = generateCardNumber();
-      const barcode = generateBarcode();
-      await setDoc(doc(db, 'clients', userId), {
-        name,
-        email,
-        cardNumber,
-        barcode,
-        points: 0,
-        level: 'Silver',
-        memberSince: new Date().toISOString().split('T')[0]
-      });
-    } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Ten email jest już zajęty');
+      const docRef = doc(db, 'clients', clientId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        setCustomerData(docSnap.data());
       } else {
-        setError('Błąd podczas rejestracji');
+        setError('Nie znaleziono karty');
       }
+    } catch (err) {
+      setError('Błąd ładowania danych');
+      console.error(err);
     }
-  };
-
-  const handleLogout = async () => {
-    if (confirm('Czy na pewno chcesz się wylogować?')) {
-      await signOut(auth);
-    }
-  };
-
-  const generateCardNumber = () => {
-    const p1 = Math.floor(1000 + Math.random() * 9000);
-    const p2 = Math.floor(1000 + Math.random() * 9000);
-    const p3 = Math.floor(1000 + Math.random() * 9000);
-    const p4 = Math.floor(1000 + Math.random() * 9000);
-    return `${p1} ${p2} ${p3} ${p4}`;
-  };
-
-  const generateBarcode = () => {
-    return Math.floor(1000000000000 + Math.random() * 9000000000000).toString();
+    setLoading(false);
   };
 
   const generateBarcodeImage = (code) => {
@@ -130,44 +68,18 @@ export default function LoyaltyCardApp() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center">
-        <div className="text-center"><div className="text-4xl mb-4">⏳</div><p className="text-gray-600">Ładowanie...</p></div>
+        <div className="text-center"><div className="text-4xl mb-4">⏳</div><p className="text-gray-600">Ładowanie karty...</p></div>
       </div>
     );
   }
 
-  if (!user || !customerData) {
+  if (error || !customerData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">{authMode === 'login' ? '🔐 Logowanie' : '✨ Rejestracja'}</h1>
-            <p className="text-gray-600">{authMode === 'login' ? 'Zaloguj się do swojej karty' : 'Stwórz nowe konto'}</p>
-          </div>
-          <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-4">
-            {authMode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Imię i nazwisko</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jan Kowalski" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jan@example.com" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Hasło</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
-            </div>
-            {error && <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">{error}</div>}
-            <button type="submit" className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transition text-lg">
-              {authMode === 'login' ? 'Zaloguj się' : 'Zarejestruj się'}
-            </button>
-          </form>
-          <div className="mt-6 text-center">
-            <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); }} className="text-purple-600 hover:text-purple-700 font-medium">
-              {authMode === 'login' ? 'Nie masz konta? Zarejestruj się' : 'Masz już konto? Zaloguj się'}
-            </button>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
+          <div className="text-6xl mb-4">❌</div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Nie znaleziono karty</h1>
+          <p className="text-gray-600">{error || 'Skontaktuj się z obsługą'}</p>
         </div>
       </div>
     );
@@ -316,9 +228,6 @@ export default function LoyaltyCardApp() {
               <div className="space-y-4">
                 <div><label className="text-sm text-gray-600 block mb-1">Numer karty</label><div className="font-mono font-bold text-gray-800">{customerData.cardNumber}</div></div>
                 <div><label className="text-sm text-gray-600 block mb-1">Status</label><div className="flex items-center gap-2"><Star className="text-yellow-500" size={20} fill="currentColor" /><span className="font-bold text-gray-800">{customerData.level} Member</span></div></div>
-                <button onClick={handleLogout} className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2">
-                  <LogOut size={20} />Wyloguj się
-                </button>
               </div>
             </div>
           </div>
