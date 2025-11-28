@@ -3,17 +3,6 @@ import { CreditCard, Gift, BarChart3, User, QrCode, Star, TrendingUp, Calendar, 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-```
-
-5. **Commit changes:** `Naprawa importów Firebase`
-
----
-
-## ⏳ **POCZEKAJ 2-3 MINUTY**
-
-Potem otwórz ponownie:
-```
-https://moja-karta-app.vercel.app?v=4
 // WKLEJ TUTAJ SWOJE DANE Z FIREBASE (te same co w admin.html!)
 const firebaseConfig = {
   apiKey: "AIzaSyA-JqDIQLl29MqzafmdcAg3NOZ_jO99CDk",
